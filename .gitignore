@@ -1,3 +1,6 @@
 *.bak-*
 *.bak
 __pycache__/
+
+# homunculus observation logs (runtime artifacts)
+.claude/
