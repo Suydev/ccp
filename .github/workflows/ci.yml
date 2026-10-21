@@ -21,7 +21,7 @@ jobs:
           tail -1 "$S/sessions.jsonl" | jq -e '.ts != ""' >/dev/null
           for i in $(seq 1 10); do printf '{"session_id":"p'$i'"}' | bash hooks/session_bookend.sh end & done
           wait
-          [ "$(wc -l < "$S/sessions.jsonl")" -eq 10 ]
+          [ "$(wc -l < "$S/sessions.jsonl")" -eq 11 ]  # 1 start + 10 end
           jq -e . "$S/sessions.jsonl" >/dev/null
       - name: installer idempotency (sandboxed HOME)
         run: |
