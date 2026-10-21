@@ -70,6 +70,19 @@ Claude Code aborts *plugin* hooks ~1 s after spawn on SessionEnd
 the decision hook is python. The mod itself is TypeScript loaded by Claude
 Code's own engine, so node's cold start never enters its path.
 
+## Block limits
+
+In `ask` mode the Stop gate blocks **unlimited** times. Claude Code's own
+limit is `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` (default 8); the installer sets it
+to `0`, which Claude Code reads as "no cap" (`if (cap > 0 && count > cap)`).
+
+`hooks/stop_gate.py` has its own optional `MAX_BLOCKS` ceiling — `0` (the
+default) means unlimited. Set it to a number to impose your own limit.
+
+The reason text is short on purpose: a long reason makes Claude Code render
+it as "Stop hook blocking error", which reads like a crash rather than a
+prompt.
+
 ## Known limitations (measured, not assumed)
 
 - **Headless ask-mode parks the session.** In `-p` mode nothing can answer
