@@ -3,85 +3,42 @@ import type { Engine, Register } from 'claude-code'
 /**
  * ccp — Claude Code control plane, inside the GUI.
  *
- * Everything the terminal `ccp` tool does, as slash commands typed right into
- * the Claude Code prompt:
+ * Everything the control plane does, as slash commands typed right into the
+ * Claude Code prompt:
  *
  *   /ccp                 — status card: mode, block count, recent sessions
  *   /ccp ask|off|exit    — switch stop-mode (hooks pick it up on the next stop)
  *   /ccp reset           — zero the stop-block counter
  *
- * No shell for state changes: mode and count are single fixed-string file
- * writes, done with fs, so an argument can never become shell syntax. The
- * optional `ccp statusline` helper and the web dashboard remain available for
- * outside-the-TUI use, but nothing here requires them.
+ * All state operations go through one python3 helper (`scripts/ccp_state.py`
+ * beside this file) invoked with $.process.run — argv, never a shell string,
+ * so arguments can never become shell syntax. python3 boots in ~0.2 s here;
+ * the mod's calls stay well inside any timeout.
  *
  * State lives in $CCP_HOME (default ~/.ccp) — the same files the Stop hook
  * and session bookends read, so every surface agrees.
  */
 
 const MODES = ['off', 'ask', 'exit'] as const
-type Mode = (typeof MODES)[number]
 
-const MAX_BLOCKS = 7
+/** The state helper, relative to this plugin's directory. */
+const HELPER = '../scripts/ccp_state.py'
 
-function ccpHome($: Engine): string {
-  // The env var the hooks were installed with wins; HOME is the fallback.
-  const envHome = $.process.env?.CCP_HOME
-  return (typeof envHome === 'string' && envHome) || `${$.process.env.HOME ?? ''}/.ccp`
+interface CcpState {
+  mode: string
+  count: number
+  sessions: string[]
 }
 
-function readText($: Engine, path: string): string {
-  try {
-    return $.fs.readFileSync(path, 'utf8').trim()
-  } catch {
-    return ''
-  }
-}
-
-function readMode($: Engine): Mode {
-  const m = readText($, `${ccpHome($)}/stop-mode`)
-  return (MODES as readonly string[]).includes(m) ? (m as Mode) : 'off'
-}
-
-function readCount($: Engine): number {
-  const n = Number.parseInt(readText($, `${ccpHome($)}/stop-count`) || '0', 10)
-  return Number.isFinite(n) ? n : 0
-}
-
-function writeText($: Engine, path: string, text: string): void {
-  $.fs.mkdirSync(ccpHome($), { recursive: true })
-  $.fs.writeFileSync(path, text)
-}
-
-function tailSessions($: Engine, n: number): string[] {
-  try {
-    const raw = $.fs.readFileSync(`${ccpHome($)}/sessions.jsonl`, 'utf8')
-    return raw.split('\n').filter(Boolean).slice(-n)
-  } catch {
-    return []
-  }
-}
-
-function statusCard($: Engine): string {
-  const mode = readMode($)
-  const count = readCount($)
-  const sessions = tailSessions($, 5)
-  const lines = [
-    `ccp — stop-mode: ${mode} · stop-count: ${count}/${MAX_BLOCKS}`,
-    '',
-    'modes:  /ccp off   (turns end normally)',
-    '        /ccp ask   (Claude must ask: continue / new task / exit)',
-    '        /ccp exit  (allow the session to end)',
-    '        /ccp reset (zero the block counter)',
-    '',
-  ]
-  if (sessions.length) {
-    lines.push('recent sessions:')
-    for (const s of sessions) lines.push(`  ${s}`)
-  } else {
-    lines.push('no sessions recorded yet')
-  }
-  return lines.join('\n')
+async function runState($: Engine, args: string[], timeoutMs = 5000): Promise<string> {
+  const home = $.plugin.root
+  const root = typeof home === 'string' ? home : '.'
+  const { stdout, stderr, exitCode } = await $.process.run(
+    ['python3', `${root}/${HELPER}`, ...args],
+    { timeoutMs },
+  )
+  if (exitCode !== 0) throw new Error(stderr.trim() || `ccp_state exited ${exitCode}`)
+  return stdout
 }
 
 export const register: Register = (on, options) => {
@@ -93,12 +50,18 @@ export const register: Register = (on, options) => {
       name: 'ccp',
       description: 'Control-plane status and stop-mode switch (/ccp [off|ask|exit|reset])',
     })
-    // Context injection on session start: one line, only when the gate is
-    // doing something (ask-mode), so it costs nothing when off.
-    if (readMode($) !== 'ask') return
-    await $.context.add(
-      'ccp: stop-mode is ASK — at each turn end, ask the user via AskUserQuestion: continue / new task / exit. If they pick exit, tell them to run /ccp exit, which allows the stop.',
-    )
+    // One context line, only when the gate is doing something (ask-mode), so
+    // it costs nothing in the default off mode.
+    try {
+      const state: CcpState = JSON.parse(await runState($, ['status']))
+      if (state.mode === 'ask') {
+        await $.context.add(
+          'ccp: stop-mode is ASK — at each turn end, ask the user via AskUserQuestion: continue / new task / exit. If they pick exit, tell them to run /ccp exit, which allows the stop.',
+        )
+      }
+    } catch {
+      // State files missing or unreadable: the /ccp command reports it when used.
+    }
   }).catch(($: Engine, e, next) => next(e))
 
   on('command.run', async ($: Engine, e, next) => {
@@ -106,32 +69,19 @@ export const register: Register = (on, options) => {
 
     const arg = String(e.args ?? '').trim().toLowerCase()
 
-    if (!arg) return { text: statusCard($) }
-
-    if ((MODES as readonly string[]).includes(arg)) {
-      const prev = readMode($)
-      writeText($, `${ccpHome($)}/stop-mode`, arg)
+    try {
+      if (!arg) return { text: await runState($, ['card']) }
+      if ((MODES as readonly string[]).includes(arg)) {
+        return { text: await runState($, ['set', arg]) }
+      }
+      if (arg === 'reset') {
+        return { text: await runState($, ['reset']) }
+      }
+      return { text: `unknown /ccp argument: ${arg}\n\n${await runState($, ['card'])}` }
+    } catch (err) {
       return {
-        text:
-          arg === prev
-            ? `already ${arg}`
-            : `stop-mode: ${prev} → ${arg}${
-                arg === 'ask'
-                  ? ' — at your next turn end, Claude will ask: continue / new task / exit.'
-                  : arg === 'exit'
-                    ? ' — the next turn is allowed to end; the supervisor loop (if running) will stop.'
-                    : ''
-              }`,
+        text: `ccp state error: ${err instanceof Error ? err.message : String(err)}`,
       }
     }
-
-    if (arg === 'reset') {
-      writeText($, `${ccpHome($)}/stop-count`, '0')
-      return { text: 'stop-count reset to 0' }
-    }
-
-    return {
-      text: `unknown /ccp argument: ${arg}\n\n${statusCard($)}`,
-    }
   }).catch(($: Engine, e, next) => next(e))
-
+}
