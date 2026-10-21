@@ -1,0 +1,6 @@
+{
+  "name": "ccp",
+  "version": "0.1.0",
+  "description": "Claude Code control plane inside the GUI: /ccp slash commands to switch stop-modes (off/ask/exit), reset the block counter, and see live session state. Reads and writes $CCP_HOME state files shared with the hooks.",
+  "author": { "name": "local" }
+}

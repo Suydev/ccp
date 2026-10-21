@@ -129,3 +129,25 @@ Inside Claude Code, add to your statusline settings:
 ```json
 { "statusLine": { "type": "command", "command": "<path-to>/ccp/bin/ccp statusline" } }
 ```
+
+## The Claude Code mod (`mod/`)
+
+Everything above is also available **inside the Claude Code GUI** as a mod:
+
+- `/ccp` — status card: mode, block count, recent sessions
+- `/ccp ask|off|exit` — switch stop-mode without leaving the prompt
+- `/ccp reset` — zero the block counter
+
+State is the same `$CCP_HOME` files the hooks use, so the TUI commands,
+web dashboard, and hooks never disagree.
+
+Install (your dev-mods path is machine-specific — see the plugin docs):
+
+```bash
+cp -r mod/ <your-plugin-dir>/ccp
+claude --plugin-dir <your-plugin-dir>/ccp
+```
+
+It is a plain Claude Code plugin: `.claude-plugin/plugin.json` +
+`hooks/hooks.json` (`modules: ["./register.ts"]`) + `hooks/register.ts`.
+No build step, no dependencies beyond the `claude-code` types.
