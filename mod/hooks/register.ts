@@ -93,6 +93,12 @@ export const register: Register = (on, options) => {
       name: 'ccp',
       description: 'Control-plane status and stop-mode switch (/ccp [off|ask|exit|reset])',
     })
+    // Context injection on session start: one line, only when the gate is
+    // doing something (ask-mode), so it costs nothing when off.
+    if (readMode($) !== 'ask') return
+    await $.context.add(
+      'ccp: stop-mode is ASK — at each turn end, ask the user via AskUserQuestion: continue / new task / exit. If they pick exit, tell them to run /ccp exit, which allows the stop.',
+    )
   }).catch(($: Engine, e, next) => next(e))
 
   on('command.run', async ($: Engine, e, next) => {
@@ -129,13 +135,3 @@ export const register: Register = (on, options) => {
     }
   }).catch(($: Engine, e, next) => next(e))
 
-  // Context injection on session start: one line, only when the gate is doing
-  // something (ask-mode), so it costs nothing in the default off mode.
-  on('session.start', async ($: Engine, _e, next) => {
-    await next()
-    if (readMode($) !== 'ask') return
-    await $.context.add(
-      'ccp: stop-mode is ASK — at each turn end, ask the user via AskUserQuestion: continue / new task / exit. If they pick exit, tell them to run /ccp exit, which allows the stop.',
-    )
-  }).catch(($: Engine, e, next) => next(e))
-}
