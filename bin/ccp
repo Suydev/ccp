@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# ccp: user-facing control commands for the Claude Code control plane.
+# Open-source friendly: no hardcoded paths, no device-specific values; all
+# state lives under $CCP_HOME (default: $HOME/.ccp).
+set -u
+
+CCP_HOME="${CCP_HOME:-$HOME/.ccp}"
+HOOKS_DIR="${CCP_HOOKS_DIR:-$(cd "$(dirname "$0")/../hooks" && pwd)}"
+SCRIPTS_DIR="${CCP_SCRIPTS_DIR:-$(cd "$(dirname "$0")/../scripts" && pwd)}"
+mkdir -p "$CCP_HOME"
+
+usage() {
+  cat <<EOF
+ccp — Claude Code control plane
+
+  ccp start [--resume] [--workdir DIR] [-- claude-args...]   run the supervisor loop
+  ccp stop-mode off|ask|exit        set the Stop-hook behavior
+  ccp status                        show current mode, counter, recent sessions
+  ccp reset                         reset the stop counter
+  ccp notify-test                   send a termux notification (if available)
+  ccp install-hook                  print the hooks JSON to merge into settings
+  ccp help                          this text
+
+State: $CCP_HOME
+EOF
+}
+
+status() {
+  echo "CCP_HOME:   $CCP_HOME"
+  echo "stop-mode:  $( [ -f "$CCP_HOME/stop-mode" ] && cat "$CCP_HOME/stop-mode" || echo off )"
+  echo "stop-count: $( [ -f "$CCP_HOME/stop-count" ] && cat "$CCP_HOME/stop-count" || echo 0 )"
+  if [ -f "$CCP_HOME/sessions.jsonl" ]; then
+    echo "recent sessions:"
+    tail -5 "$CCP_HOME/sessions.jsonl"
+  else
+    echo "recent sessions: (none)"
+  fi
+  if [ -f "$CCP_HOME/supervisor.log" ]; then
+    echo "supervisor log tail:"
+    tail -3 "$CCP_HOME/supervisor.log"
+  fi
+}
+
+notify_test() {
+  if command -v termux-notification >/dev/null 2>&1; then
+    termux-notification --title "CCP" --content "control plane alive at $(date +%H:%M:%S)"
+    echo "sent."
+  else
+    echo "termux-notification not on PATH; skipping."
+  fi
+}
+
+install_hook() {
+  cat <<EOF
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "CCP_HOME=$CCP_HOME python3 $HOOKS_DIR/stop_gate.py",
+        "timeout": 20
+      }]
+    }],
+    "SessionStart": [{
+      "hooks": [{
+        "type": "command",
+        "command": "CCP_HOME=$CCP_HOME bash $HOOKS_DIR/session_bookend.sh start",
+        "timeout": 20
+      }]
+    }],
+    "SessionEnd": [{
+      "hooks": [{
+        "type": "command",
+        "command": "CCP_HOME=$CCP_HOME bash $HOOKS_DIR/session_bookend.sh end",
+        "timeout": 20
+      }]
+    }]
+  }
+}
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+case "$cmd" in
+  start)
+    mode_from=""
+    for a in "$@"; do
+      case "$a" in
+        ask|off|exit) mode_from="$a" ;;
+      esac
+    done
+    [ -n "$mode_from" ] && printf '%s' "$mode_from" > "$CCP_HOME/stop-mode"
+    exec "$SCRIPTS_DIR/ccp-supervisor.sh" "$@"
+    ;;
+  stop-mode)
+    m="${1:-}"
+    case "$m" in
+      off|ask|exit) printf '%s' "$m" > "$CCP_HOME/stop-mode"; echo "stop-mode -> $m" ;;
+      *) echo "usage: ccp stop-mode off|ask|exit" >&2; exit 2 ;;
+    esac
+    ;;
+  status) status ;;
+  reset) printf '0' > "$CCP_HOME/stop-count"; echo "stop-count reset" ;;
+  notify-test) notify_test ;;
+  install-hook) install_hook ;;
+  help|*) usage ;;
+esac
