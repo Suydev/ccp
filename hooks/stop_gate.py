@@ -76,8 +76,8 @@ def main():
             "CCP stop gate: the user wants the session to keep going. "
             "Ask the user what to do next with AskUserQuestion: "
             "'continue', 'new task', or 'exit'. "
-            "If the user picks exit, tell them to run: ccp stop-mode exit "
-            "(then this stop is allowed). "
+            "If the user picks exit, tell them to run /ccp exit — that "
+            "allows the next stop to end the session. "
             f"(ccp block {n}/{MAX_BLOCKS})"
         ),
     }))
