@@ -1,3 +1,5 @@
+[![ci](https://github.com/Suydev/ccp/actions/workflows/ci.yml/badge.svg)](https://github.com/Suydev/ccp/actions/workflows/ci.yml)
+
 # ccp — Claude Code control plane for Termux
 
 A small, dependency-light supervisor + hook layer that keeps Claude Code
