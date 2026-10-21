@@ -50,6 +50,8 @@ jobs:
           curl -sf 'http://127.0.0.1:8798/?cb=1' | grep -q 'ccp control plane'
           curl -sf 'http://127.0.0.1:8798/api/state?x=1' | jq -e .mode
           kill $SRV
+      - name: failure gate units (StopFailure)
+        run: bash tests/test_failure_gate.sh
       - name: e2e local layers (gate, bookend, dashboard, ttyd)
         run: bash tests/test_e2e_local.sh
       - name: summary

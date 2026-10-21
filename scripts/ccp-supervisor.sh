@@ -24,6 +24,11 @@ set_mode() {
   printf '%s' "$1" > "$CCP_HOME/stop-mode"
 }
 
+# How many failed turns the StopFailure hook has recorded.
+failure_count() {
+  [ -f "$CCP_HOME/failure-count" ] && cat "$CCP_HOME/failure-count" 2>/dev/null || echo 0
+}
+
 last_session_id() {
   jq -r 'select(.event == "end") | .session_id // empty' \
     "$CCP_HOME/sessions.jsonl" 2>/dev/null | tail -1
@@ -86,6 +91,7 @@ while :; do
     fi
   fi
 
+  fails_before=$(failure_count)
   note "cycle $cycle: launching claude in $WORKDIR"
   (
     cd "$WORKDIR" || exit 127
@@ -95,6 +101,18 @@ while :; do
   note "cycle $cycle: claude exited rc=$rc stop-mode=$(mode)"
   printf '{"ts":"%s","event":"supervisor_cycle","cycle":%d,"rc":%d,"mode":"%s"}\n' \
     "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$cycle" "$rc" "$(mode)" >> "$CCP_HOME/supervisor.log"
+
+  # A failed turn (API error, blocked egress, firewall) is recorded by the
+  # StopFailure hook in $CCP_HOME/failures.jsonl. When the count grew
+  # during this cycle, the session died for a reason the model could not
+  # fix — back off further before relaunching, and resume the session so
+  # the conversation is not lost.
+  fails_now=$(failure_count)
+  if [ "$fails_now" != "$fails_before" ]; then
+    note "turn failed during this cycle (failures: $fails_before -> $fails_now); backoff 20s then resume"
+    sleep 20
+    continue
+  fi
 
   # claude exits 0 on normal end, 130 on ctrl-c, 143 on TERM. treat fatal
   # non-zero as a crash-restart with backoff.

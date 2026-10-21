@@ -41,10 +41,12 @@ merge() {
           !JSON.stringify(grp).includes(hooksDir));
         s.hooks[ev] = keep.concat([{ hooks: entry(cmd(ev)) }]);
       };
-      const cmd = (ev) => ev === "Stop"
-        ? `python3 ${hooksDir}/stop_gate.py`
-        : `bash ${hooksDir}/session_bookend.sh ${ev === "SessionStart" ? "start" : "end"}`;
-      replace("Stop"); replace("SessionStart"); replace("SessionEnd");
+      const cmd = (ev) => {
+        if (ev === "Stop") return `python3 ${hooksDir}/stop_gate.py`;
+        if (ev === "StopFailure") return `python3 ${hooksDir}/failure_gate.py`;
+        return `bash ${hooksDir}/session_bookend.sh ${ev === "SessionStart" ? "start" : "end"}`;
+      };
+      replace("Stop"); replace("StopFailure"); replace("SessionStart"); replace("SessionEnd");
       fs.writeFileSync(settingsPath, JSON.stringify(s, null, 2));
     ' "$SETTINGS" "$HOOKS_DIR" "$CCP_HOME"
   elif command -v jq >/dev/null 2>&1; then
@@ -55,6 +57,7 @@ merge() {
           | map(select((tostring | contains($hd)) | not)))
           + [{ hooks: entry(cmd) }];
       replace("Stop"; "python3 " + $hd + "/stop_gate.py")
+      | replace("StopFailure"; "python3 " + $hd + "/failure_gate.py")
       | replace("SessionStart"; "bash " + $hd + "/session_bookend.sh start")
       | replace("SessionEnd"; "bash " + $hd + "/session_bookend.sh end")
     ' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
