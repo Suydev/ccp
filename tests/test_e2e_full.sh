@@ -52,58 +52,11 @@ chk "mode file back to off"      "[ \"\$(cat '$CCP_HOME/stop-mode')\" = off ]"
 rc=$(run_claude "$WORK/ccp_reset.out" "/ccp reset")
 chk "reset reports 0"            "command grep -q 'reset to 0' '$WORK/ccp_reset.out'"
 
-echo "== 3. stop gate behaviour =="
-GATE="$ROOT/hooks/stop_gate.py"
-printf 'ask' > "$WORK/mode"; export CCP_HOME="$WORK"
-out=$(printf '{"stop_hook_active":false}' | python3 "$GATE" 2>/dev/null)
-chk "ask mode blocks"            "printf '%s' \"\$out\" | command grep -q '\"decision\": \"block\"'"
-printf 'off' > "$WORK/mode"
-out=$(printf '{}' | python3 "$GATE" 2>/dev/null)
-chk "off mode silent"            "[ -z \"\$out\" ]"
-printf 'exit' > "$WORK/mode"
-out=$(printf '{}' | python3 "$GATE" 2>/dev/null)
-chk "exit mode silent"           "[ -z \"\$out\" ]"
-unset CCP_HOME
-
-echo "== 4. session bookend =="
-export CCP_HOME="$WORK"
-printf '{"session_id":"e2e-1","cwd":"/tmp"}' | bash "$ROOT/hooks/session_bookend.sh" start
-printf '{"session_id":"e2e-1","cwd":"/tmp","reason":"other"}' | bash "$ROOT/hooks/session_bookend.sh" end
-chk "start record written"        "command grep -q '\"event\":\"start\"' '$WORK/sessions.jsonl'"
-chk "end record written"          "command grep -q '\"event\":\"end\"' '$WORK/sessions.jsonl'"
-chk "records are valid json"      "jq -e . '$WORK/sessions.jsonl'"
-unset CCP_HOME
-
-echo "== 5. dashboard API =="
-export CCP_HOME="$WORK"
-printf 'ask' > "$WORK/mode"; echo 3 > "$WORK/stop-count"
-CCP_PORT=8791 python3 "$ROOT/scripts/ccp-server.py" > "$WORK/srv.log" 2>&1 &
-SRV=$!
-for i in 1 2 3 4 5 6 7 8 9 10; do
-  curl -sf http://127.0.0.1:8791/api/state >/dev/null 2>&1 && break
-  sleep 1
-done
-chk "state reports mode"          "curl -sf http://127.0.0.1:8791/api/state | jq -e '.mode == \"ask\"'"
-chk "state reports count"         "curl -sf http://127.0.0.1:8791/api/state | jq -e '.stop_count == 3'"
-chk "mode change via POST"        "curl -sf -X POST -d '{\"mode\":\"exit\"}' http://127.0.0.1:8791/api/mode | jq -e '.mode == \"exit\"'"
-chk "file reflects POST"          "[ \"\$(cat '$WORK/mode')\" = exit ]"
-chk "invalid mode rejected"       "curl -s -X POST -d '{\"mode\":\"<script>\"}' http://127.0.0.1:8791/api/mode | command grep -q error"
-chk "unknown path 404s"           "[ \"\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8791/nope)\" = 404 ]"
-chk "query string served"         "curl -sf 'http://127.0.0.1:8791/?cb=1' | command grep -q 'ccp control plane'"
-chk "page renders"                "curl -sf http://127.0.0.1:8791/ | command grep -q 'ccp control plane'"
-kill $SRV 2>/dev/null
-unset CCP_HOME
-
-echo "== 6. web terminal (ttyd) =="
-if command -v ttyd >/dev/null 2>&1; then
-  ttyd -p 8792 -W bash -lc 'true' > "$WORK/ttyd.log" 2>&1 &
-  TT=$!
-  for i in 1 2 3 4 5; do curl -sf -o /dev/null http://127.0.0.1:8792/ && break; sleep 1; done
-  chk "ttyd serves http"          "curl -sf -o /dev/null http://127.0.0.1:8792/"
-  chk "websocket upgrades"         "curl -s -i -N -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' http://127.0.0.1:8792/ws 2>/dev/null | command grep -q '101 Switching Protocols'"
-  kill $TT 2>/dev/null
+echo "== 3-6. gate, bookend, dashboard, ttyd (shared with the local suite) =="
+if bash "$ROOT/tests/test_e2e_local.sh"; then
+  ok "local e2e layers"
 else
-  echo "skip - ttyd not installed"
+  bad "local e2e layers"
 fi
 
 export CCP_HOME="$REAL_CCP_HOME"
