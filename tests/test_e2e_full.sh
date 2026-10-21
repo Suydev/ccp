@@ -16,6 +16,14 @@ PASS=0; FAIL=0
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# NEVER touch the user's live state: the state file the slash command reads
+# is $CCP_HOME/stop-mode, so point the whole suite at a sandbox and restore
+# the real CCP_HOME afterwards.
+REAL_CCP_HOME="${CCP_HOME:-$HOME/.ccp}"
+export CCP_HOME="$WORK/live"
+mkdir -p "$CCP_HOME"
+printf 'off' > "$CCP_HOME/stop-mode"
+
 ok()   { PASS=$((PASS+1)); echo "ok   - $1"; }
 bad()  { FAIL=$((FAIL+1)); echo "FAIL - $1${2:+ :: $2}"; }
 chk()  { if eval "$2" >/dev/null 2>&1; then ok "$1"; else bad "$1" "condition failed: $2"; fi; }
@@ -35,12 +43,12 @@ chk "card lists modes"            "command grep -q '/ccp ask' '$WORK/ccp_card.ou
 chk "no hook errors"              "! command grep -qi 'hook cancelled\|timed out after' '$WORK/ccp_card.out'"
 
 echo "== 2. mode switch through /ccp =="
-printf 'off' > "$HOME/.ccp/stop-mode"
+printf 'off' > "$CCP_HOME/stop-mode"
 rc=$(run_claude "$WORK/ccp_ask.out" "/ccp ask")
 chk "session exits 0"            "[ '$rc' = 0 ]"
-chk "mode file is now ask"       "[ \"\$(cat '$HOME/.ccp/stop-mode')\" = ask ]"
+chk "mode file is now ask"       "[ \"\$(cat '$CCP_HOME/stop-mode')\" = ask ]"
 rc=$(run_claude "$WORK/ccp_off.out" "/ccp off")
-chk "mode file back to off"      "[ \"\$(cat '$HOME/.ccp/stop-mode')\" = off ]"
+chk "mode file back to off"      "[ \"\$(cat '$CCP_HOME/stop-mode')\" = off ]"
 rc=$(run_claude "$WORK/ccp_reset.out" "/ccp reset")
 chk "reset reports 0"            "command grep -q 'reset to 0' '$WORK/ccp_reset.out'"
 
@@ -98,6 +106,7 @@ else
   echo "skip - ttyd not installed"
 fi
 
+export CCP_HOME="$REAL_CCP_HOME"
 echo
 echo "pass=$PASS fail=$FAIL"
 [ "$FAIL" = "0" ]

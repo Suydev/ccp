@@ -73,12 +73,9 @@ def main():
     sys.stdout.write(json.dumps({
         "decision": "block",
         "reason": (
-            "CCP stop gate: the user wants the session to keep going. "
-            "Ask the user what to do next with AskUserQuestion: "
-            "'continue', 'new task', or 'exit'. "
-            "If the user picks exit, tell them to run /ccp exit — that "
-            "allows the next stop to end the session. "
-            f"(ccp block {n}/{MAX_BLOCKS})"
+            "ccp: keep going. Ask the user via AskUserQuestion: "
+            "continue / new task / exit. On exit, tell them to run /ccp exit. "
+            f"(block {n}/{MAX_BLOCKS})"
         ),
     }))
     sys.exit(0)

@@ -31,7 +31,7 @@ t "mode exit -> silent" "" '{}'
 printf 'ask' > "$TMP/stop-mode"
 rm -f "$TMP/stop-count"
 t "mode ask -> blocks" '"decision": "block"' '{}'
-t "mode ask -> has reason" 'Ask the user' '{}'
+t "mode ask -> has reason" 'Ask the user via AskUserQuestion' '{}'
 
 # count blocks until cap: after MAX_BLOCKS+1 with stop_hook_active, yields
 for i in 1 2 3 4 5 6 7 8 9; do
