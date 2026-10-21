@@ -88,3 +88,20 @@ $HOME/.ccp/
   streams.
 - Cost parsing from CCR logs — CCR UI already shows it.
 - SQLite state — one small JSON + one JSONL is enough; jq/python read both.
+
+## Integration finding (2026-10-21)
+
+Stop-hook precedence: the first decisive Stop-hook decision wins. The
+`claude-judge` plugin (double-shot-latte) emits `{"decision":"approve"}`
+when its own evaluation times out — an approve moots CCP's ask-block.
+Observed live: stop_gate incremented its counter (ran, blocked) but the
+session transcript shows `preventedContinuation:false` because another Stop
+hook approved first.
+
+Consequences:
+- In ask-mode with Stop-hook plugins enabled (double-shot-latte, homunculus
+  on_stop), CCP's gate can be vetoed. For reliable ask-mode, disable
+  competing Stop-hook plugins for the supervised session (run with
+  `--strict-mcp-config` is unrelated; use `claude --settings ... ` with
+  plugins off, or uninstall/disable the judge plugin).
+- In off/exit modes CCP is inert, so no interference.
