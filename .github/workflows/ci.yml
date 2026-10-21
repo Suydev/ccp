@@ -50,6 +50,8 @@ jobs:
           curl -sf 'http://127.0.0.1:8798/?cb=1' | grep -q 'ccp control plane'
           curl -sf 'http://127.0.0.1:8798/api/state?x=1' | jq -e .mode
           kill $SRV
+      - name: e2e (no claude needed): gate, bookend, dashboard, ttyd
+        run: bash tests/test_e2e_local.sh
       - name: summary
         if: always()
         run: echo "## ccp ci" >> "$GITHUB_STEP_SUMMARY"
