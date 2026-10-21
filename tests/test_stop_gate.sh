@@ -31,13 +31,20 @@ t "mode exit -> silent" "" '{}'
 printf 'ask' > "$TMP/stop-mode"
 rm -f "$TMP/stop-count"
 t "mode ask -> blocks" '"decision": "block"' '{}'
-t "mode ask -> has reason" 'Ask the user via AskUserQuestion' '{}'
+t "mode ask -> has reason" 'AskUserQuestion' '{}'
+t "mode ask -> reason says ask every time" 'EVERY turn end' '{}'
 
-# count blocks until cap: after MAX_BLOCKS+1 with stop_hook_active, yields
-for i in 1 2 3 4 5 6 7 8 9; do
-  printf '%s' '{}' | python3 "$HOOKS_DIR/stop_gate.py" >/dev/null 2>&1
+# unlimited: every consecutive stop must still block (no self-truncation)
+n_blocked=0
+for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  o=$(printf '%s' '{"stop_hook_active": true}' | python3 "$HOOKS_DIR/stop_gate.py" 2>/dev/null)
+  case "$o" in *'"decision": "block"'*) n_blocked=$((n_blocked + 1));; esac
 done
-t "cap exceeded -> yields" "" '{"stop_hook_active": true}'
+if [ "$n_blocked" = "20" ]; then
+  PASS=$((PASS+1)); echo "ok   - 20 consecutive blocks all block (unlimited)"
+else
+  FAIL=$((FAIL+1)); echo "FAIL - 20 consecutive blocks all block (unlimited): only $n_blocked blocked"
+fi
 
 # invalid json -> treated as empty payload: mode ask still applies, no crash
 printf 'ask' > "$TMP/stop-mode"

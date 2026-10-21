@@ -1,16 +1,19 @@
-#!/data/data/com.termux/files/usr/bin/python3
-"""CCP Stop gate. Small, fast (python boots in ~0.2s here; node takes 1.8-8.2s).
+#!/usr/bin/env python3
+"""CCP stop gate — the Stop hook that keeps a session alive.
 
-Reads the Stop hook payload on stdin. Decides based on $HOME/.ccp/stop-mode:
-  off   -> exit 0 silently (turn ends normally)
-  ask   -> block once per stop-cap window, telling Claude to ask the user
-  exit  -> exit 0 silently (user chose to leave; let the session end)
+Behaviour is driven by $CCP_HOME/stop-mode:
+  off   -> exit 0 silently; turns end normally (default)
+  ask   -> block the turn end and tell the model to ask the user
+  exit  -> exit 0 silently; the session may end
 
-The ask path uses the standard Stop-hook block contract:
-  {"decision": "block", "reason": "..."}
-Claude Code caps consecutive Stop blocks at 8 (CLAUDE_CODE_STOP_HOOK_BLOCK_CAP
-can raise it); we count our own blocks and yield before the cap so the cap
-never truncates the loop in a confusing way.
+In `ask` mode the gate blocks **unlimited** times. Claude Code's own limit is
+`CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` (default 8); the installer sets that env var
+to 0, which Claude Code reads as "no cap" (`if (cap > 0 && count > cap)`).
+This module's own MAX_BLOCKS is a secondary, optional ceiling: 0 means
+unlimited, which is the default.
+
+The block reason is deliberately short. Claude Code renders a long reason as a
+"Stop hook blocking error", which looks like a failure rather than a prompt.
 """
 import json
 import os
@@ -19,7 +22,18 @@ import sys
 STATE = os.environ.get("CCP_HOME") or os.path.join(os.environ.get("HOME", "/"), ".ccp")
 MODE_FILE = os.path.join(STATE, "stop-mode")
 COUNTER = os.path.join(STATE, "stop-count")
-MAX_BLOCKS = 7  # yield one before Claude Code's own cap of 8
+
+# 0 = unlimited. Set a number to impose a ceiling of your own.
+MAX_BLOCKS = 0
+
+REASON = (
+    "ccp: the user wants this session to keep going. Do NOT end your turn "
+    "and do NOT just continue the work silently — you MUST call the "
+    "AskUserQuestion tool right now, asking the user to choose "
+    "'continue', 'new task', or 'exit'. Ask this question on EVERY turn end "
+    "(every time you see this reason, ask again) until the user picks exit; "
+    "when they pick exit, tell them to run /ccp exit so the session can end."
+)
 
 
 def read_mode():
@@ -31,14 +45,21 @@ def read_mode():
     return m if m in ("off", "ask", "exit") else "off"
 
 
-def bump_count():
+def read_count():
     try:
-        n = int(open(COUNTER).read().strip() or 0)
+        return int(open(COUNTER).read().strip() or 0)
     except (OSError, ValueError):
-        n = 0
-    n += 1
-    with open(COUNTER, "w") as f:
-        f.write(str(n))
+        return 0
+
+
+def bump_count():
+    n = read_count() + 1
+    try:
+        os.makedirs(STATE, exist_ok=True)
+        with open(COUNTER, "w") as f:
+            f.write(str(n))
+    except OSError:
+        pass
     return n
 
 
@@ -55,28 +76,28 @@ def main():
         payload = json.load(sys.stdin)
     except Exception:
         payload = {}
-    # stop_hook_active=True means this stop is itself the result of a
-    # previous block; still counts toward our own limit.
+    if not isinstance(payload, dict):
+        payload = {}
+    # stop_hook_active=True means this stop is the result of a previous
+    # block, so it counts toward any ceiling we impose.
     stop_hook_active = bool(payload.get("stop_hook_active"))
 
-    mode = read_mode()
-    if mode != "ask":
+    if read_mode() != "ask":
         reset_count()
         sys.exit(0)
 
     n = bump_count()
-    if stop_hook_active and n > MAX_BLOCKS:
-        # yield before Claude Code's own 8-block cap
+    if MAX_BLOCKS and stop_hook_active and n > MAX_BLOCKS:
+        # Only reached when a finite ceiling is configured. With the default
+        # (0 = unlimited) this never fires: the loop must not truncate
+        # itself just because the user is taking a while.
         reset_count()
         sys.exit(0)
 
+    counter = f"(block {n})" if not MAX_BLOCKS else f"(block {n}/{MAX_BLOCKS})"
     sys.stdout.write(json.dumps({
         "decision": "block",
-        "reason": (
-            "ccp: keep going. Ask the user via AskUserQuestion: "
-            "continue / new task / exit. On exit, tell them to run /ccp exit. "
-            f"(block {n}/{MAX_BLOCKS})"
-        ),
+        "reason": f"{REASON} {counter}",
     }))
     sys.exit(0)
 

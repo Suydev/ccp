@@ -56,7 +56,11 @@ export const register: Register = (on, options) => {
       const state: CcpState = JSON.parse(await runState($, ['status']))
       if (state.mode === 'ask') {
         await $.context.add(
-          'ccp: stop-mode is ASK — at each turn end, ask the user via AskUserQuestion: continue / new task / exit. If they pick exit, tell them to run /ccp exit, which allows the stop.',
+          'ccp: stop-mode is ASK. On EVERY turn end you must call the ' +
+            'AskUserQuestion tool with options "continue", "new task", "exit" ' +
+            '— ask again every time, not just the first time. Never end a turn ' +
+            'silently while in ask mode. If the user picks exit, tell them to ' +
+            'run /ccp exit, which allows the session to end.',
         )
       }
     } catch {

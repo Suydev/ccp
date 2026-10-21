@@ -34,6 +34,9 @@ merge() {
       const [settingsPath, hooksDir, ccpHome] = process.argv.slice(1);
       const s = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
       s.hooks = s.hooks || {};
+      // 0 = unlimited Stop blocks in Claude Code (`if (cap > 0 && count > cap)`)
+      s.env = s.env || {};
+      s.env.CLAUDE_CODE_STOP_HOOK_BLOCK_CAP = "0";
       const entry = (cmd) => [{ type: "command", command: `CCP_HOME=${ccpHome} ${cmd}`, timeout: 20 }];
       // idempotent: replace any entry that already points at these hooks
       const replace = (ev, obj) => {
@@ -52,11 +55,13 @@ merge() {
   elif command -v jq >/dev/null 2>&1; then
     jq --arg hd "$HOOKS_DIR" --arg ch "$CCP_HOME" '
       def entry(cmd): [{ type: "command", command: ("CCP_HOME=" + $ch + " " + cmd), timeout: 20 }];
+      def env0: .env = ((.env // {}) + {CLAUDE_CODE_STOP_HOOK_BLOCK_CAP: "0"});
       def replace(ev; cmd):
         .hooks[ev] = ((.hooks[ev] // [])
           | map(select((tostring | contains($hd)) | not)))
           + [{ hooks: entry(cmd) }];
-      replace("Stop"; "python3 " + $hd + "/stop_gate.py")
+      env0
+      | replace("Stop"; "python3 " + $hd + "/stop_gate.py")
       | replace("StopFailure"; "python3 " + $hd + "/failure_gate.py")
       | replace("SessionStart"; "bash " + $hd + "/session_bookend.sh start")
       | replace("SessionEnd"; "bash " + $hd + "/session_bookend.sh end")
