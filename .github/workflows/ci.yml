@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: unit tests (stop gate)
+        run: bash tests/test_stop_gate.sh
+      - name: bookend degradation paths
+        run: |
+          set -e
+          S=$(mktemp -d)
+          export CCP_HOME="$S"
+          printf '{"session_id":"a","cwd":"/c"}' | bash hooks/session_bookend.sh start
+          tail -1 "$S/sessions.jsonl" | jq -e '.ts != ""' >/dev/null
+          for i in $(seq 1 10); do printf '{"session_id":"p'$i'"}' | bash hooks/session_bookend.sh end & done
+          wait
+          [ "$(wc -l < "$S/sessions.jsonl")" -eq 10 ]
+          jq -e . "$S/sessions.jsonl" >/dev/null
+      - name: installer idempotency (sandboxed HOME)
+        run: |
+          set -e
+          SB=$(mktemp -d); mkdir -p "$SB/.claude"; echo '{}' > "$SB/.claude/settings.json"
+          env HOME="$SB" bash install.sh >/dev/null
+          env HOME="$SB" bash install.sh >/dev/null
+          n=$(jq '.hooks.Stop | length' "$SB/.claude/settings.json")
+          [ "$n" = "1" ] || { echo "expected 1 Stop entry, got $n"; exit 1; }
+      - name: summary
+        if: always()
+        run: echo "## ccp ci" >> "$GITHUB_STEP_SUMMARY"
