@@ -31,6 +31,21 @@ jobs:
           env HOME="$SB" bash install.sh >/dev/null
           n=$(jq '.hooks.Stop | length' "$SB/.claude/settings.json")
           [ "$n" = "1" ] || { echo "expected 1 Stop entry, got $n"; exit 1; }
+      - name: web dashboard API
+        run: |
+          set -e
+          S=$(mktemp -d); export CCP_HOME="$S"
+          printf 'ask' > "$S/stop-mode"; echo 3 > "$S/stop-count"
+          printf '{"ts":"t1","event":"start","session_id":"a"}' > "$S/sessions.jsonl"
+          CCP_PORT=8798 python3 scripts/ccp-server.py > "$S/server.log" 2>&1 &
+          SRV=$!; sleep 2
+          curl -sf http://127.0.0.1:8798/api/state | jq -e '.mode == "ask" and .stop_count == 3'
+          curl -sf -X POST -d '{"mode":"exit"}' http://127.0.0.1:8798/api/mode | jq -e .mode == "exit"
+          curl -sf http://127.0.0.1:8798/api/state | jq -e '.mode == "exit"'
+          curl -s -X POST -d '{"mode":"<script>"}' http://127.0.0.1:8798/api/mode | grep -q 'error'
+          curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8798/nope | grep -q 404
+          curl -sf http://127.0.0.1:8798/ | grep -q 'ccp control plane'
+          kill $SRV
       - name: summary
         if: always()
         run: echo "## ccp ci" >> "$GITHUB_STEP_SUMMARY"
