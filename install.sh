@@ -69,6 +69,22 @@ if command -v jq >/dev/null 2>&1; then
   jq -e . "$SETTINGS" >/dev/null || { echo "MERGE BROKE SETTINGS; restoring backup" >&2; ls -t "$SETTINGS".bak-ccp-* | head -1 | xargs cp -- "$SETTINGS"; exit 1; }
 fi
 echo "hooks merged into $SETTINGS"
+
+# Also install the /ccp slash command into the user's commands dir, and the
+# state helper next to the state files, so /ccp resolves without a plugin.
+CMD_DIR="${CCP_COMMAND_DIR:-$HOME/.claude/commands}"
+mkdir -p "$CMD_DIR" 2>/dev/null || true
+if [ -f "$ROOT/commands/ccp.md" ]; then
+  cp "$ROOT/commands/ccp.md" "$CMD_DIR/ccp.md"
+  echo "slash command: $CMD_DIR/ccp.md"
+fi
+if [ -f "$ROOT/mod/scripts/ccp_state.py" ]; then
+  mkdir -p "$CCP_HOME" 2>/dev/null || true
+  cp "$ROOT/mod/scripts/ccp_state.py" "$CCP_HOME/ccp_state.py"
+  chmod +x "$CCP_HOME/ccp_state.py" 2>/dev/null || true
+  echo "state helper:  $CCP_HOME/ccp_state.py"
+fi
+
 mkdir -p "$CCP_HOME"
 [ -f "$CCP_HOME/stop-mode" ] || printf 'off' > "$CCP_HOME/stop-mode"
 echo "state dir ready: $CCP_HOME (stop-mode=off)"
