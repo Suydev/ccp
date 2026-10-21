@@ -134,3 +134,18 @@ Delivery paths, tried in order:
 
 The queue is drained exactly once: drained messages move to
 `$CCP_HOME/steer-sent/`, so a later session start does not repeat them.
+
+## Mid-turn delivery: what actually happens
+
+Claude Code has a native message queue. A message that arrives while a turn
+is running is **held** and shown as `ctrl+x ctrl+s to send now`; the current
+turn finishes first, and the instruction is picked up on the next step.
+`ccp steer` presses that key pair for you, so the instruction lands without
+waiting for the turn to end.
+
+This is the same mechanism behind Claude Code's own `/background mid-turn`
+command, and it is why the instruction arrives "instead of the next tool
+result" rather than replacing it: a held message is a *new* user message
+absorbed by the running turn, never a substitute for a tool result.
+
+Use `--no-send-now` to leave the message queued instead of flushing it.

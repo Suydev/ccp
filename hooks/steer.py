@@ -101,8 +101,13 @@ def tmux_pane(session):
         return None
 
 
-def tmux_deliver(session, text):
-    """Bracketed paste + Enter. Returns True on success."""
+def tmux_deliver(session, text, send_now=True):
+    """Bracketed paste + Enter, then optionally flush the message queue.
+
+    Claude Code queues a pasted message while a turn is running and shows
+    "ctrl+x ctrl+s to send now". Pressing that pair delivers the instruction
+    immediately instead of waiting for the turn to end.
+    """
     import subprocess
     pane = tmux_pane(session) or session
     # strip the markers so a user message can never break out of the paste
@@ -116,6 +121,18 @@ def tmux_deliver(session, text):
             ["tmux", "send-keys", "-t", pane, "Enter"],
             capture_output=True, timeout=10, check=True,
         )
+        if send_now:
+            # ctrl+x then ctrl+s: flush the queued message now
+            time.sleep(0.4)
+            subprocess.run(
+                ["tmux", "send-keys", "-t", pane, "C-x"],
+                capture_output=True, timeout=10,
+            )
+            time.sleep(0.2)
+            subprocess.run(
+                ["tmux", "send-keys", "-t", pane, "C-s"],
+                capture_output=True, timeout=10,
+            )
         return True
     except Exception:
         return False
@@ -225,6 +242,11 @@ def main():
         print(f"cleared {n} queued message(s)")
         return 0
 
+    send_now = True
+    if "--no-send-now" in args:
+        args = [a for a in args if a != "--no-send-now"]
+        send_now = False
+
     text = None
     if args[0] == "--file":
         if len(args) < 2:
@@ -248,7 +270,7 @@ def main():
 
     # deliver to a tmux session if there is one
     session = find_tmux_session()
-    if session and tmux_deliver(session, text):
+    if session and tmux_deliver(session, text, send_now=send_now):
         mark_sent(path, f"tmux:{session}")
         print(f"delivered to tmux session {session} (also queued as {os.path.basename(path)})")
         return 0
