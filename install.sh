@@ -87,20 +87,22 @@ if command -v jq >/dev/null 2>&1; then
 fi
 echo "hooks merged into $SETTINGS"
 
-# Also install the /ccp slash command into the user's commands dir, and the
-# state helper next to the state files, so /ccp resolves without a plugin.
-CMD_DIR="${CCP_COMMAND_DIR:-$HOME/.claude/commands}"
-mkdir -p "$CMD_DIR" 2>/dev/null || true
+# Deploy the self-contained /ccp command: a helper that does the work
+# directly (no model round-trip) plus the slash command that calls it.
+# Claude Code only: the command lives in the Claude Code config dir.
+CC_DIR="${CCP_CONFIG_DIR:-$HOME/.claude}"
+mkdir -p "$CC_DIR/ccp" "$CC_DIR/commands" 2>/dev/null || true
+if [ -f "$ROOT/bin/ccp.py" ]; then
+  cp "$ROOT/bin/ccp.py" "$CC_DIR/ccp/ccp.py"
+  cp "$ROOT/hooks/steer.py" "$CC_DIR/ccp/steer.py"
+  chmod +x "$CC_DIR/ccp/ccp.py" "$CC_DIR/ccp/steer.py" 2>/dev/null || true
+  echo "helper:       $CC_DIR/ccp/ccp.py"
+fi
 if [ -f "$ROOT/commands/ccp.md" ]; then
-  cp "$ROOT/commands/ccp.md" "$CMD_DIR/ccp.md"
-  echo "slash command: $CMD_DIR/ccp.md"
+  cp "$ROOT/commands/ccp.md" "$CC_DIR/commands/ccp.md" 2>/dev/null || true
 fi
-if [ -f "$ROOT/mod/scripts/ccp_state.py" ]; then
-  mkdir -p "$CCP_HOME" 2>/dev/null || true
-  cp "$ROOT/mod/scripts/ccp_state.py" "$CCP_HOME/ccp_state.py"
-  chmod +x "$CCP_HOME/ccp_state.py" 2>/dev/null || true
-  echo "state helper:  $CCP_HOME/ccp_state.py"
-fi
+
+
 
 mkdir -p "$CCP_HOME"
 [ -f "$CCP_HOME/stop-mode" ] || printf 'off' > "$CCP_HOME/stop-mode"

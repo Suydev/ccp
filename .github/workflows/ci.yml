@@ -52,6 +52,8 @@ jobs:
           kill $SRV
       - name: failure gate units (StopFailure)
         run: bash tests/test_failure_gate.sh
+      - name: ccp helper units (the /ccp command body)
+        run: bash tests/test_ccp_helper.sh
       - name: steering units (queue, drain, deliver)
         run: bash tests/test_steer.sh
       - name: e2e local layers (gate, bookend, dashboard, ttyd)

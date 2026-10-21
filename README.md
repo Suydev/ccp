@@ -9,6 +9,24 @@ separate terminal tools required for daily use.
 
 ## Use it (in the Claude Code prompt)
 
+`/ccp` is a **single dedicated slash command for Claude Code**. It runs a local
+helper directly — the helper does the work, so there is no model round-trip
+and no extra tokens:
+
+| Command | What it does |
+|---|---|
+| `/ccp` | status: mode, block count, supervisor state, recent sessions |
+| `/ccp ask` | ask you at every turn end: continue / new task / exit |
+| `/ccp off` | turns end normally (default) |
+| `/ccp exit` | allow the session to end |
+| `/ccp reset` | zero the block counter |
+| `/ccp steer "text"` | redirect a running session without stopping it |
+| `/ccp help` | full syntax |
+
+The helper lives at `~/.claude/ccp/ccp.py` and the command at
+`~/.claude/commands/ccp.md` — both installed by `./install.sh`, both
+Claude-Code-only by construction.
+
 | Command | What it does |
 |---|---|
 | `/ccp` | status card: mode, block count, recent sessions |

@@ -1,35 +1,29 @@
 ---
 name: ccp
-description: Control-plane status and stop-mode switch. /ccp [off|ask|exit|reset]
-argument-hint: [off|ask|exit|reset]
+description: Control plane for this Claude Code session — stop-mode, block counter, and steering. /ccp [status|ask|off|exit|reset|steer <text>|help]
+argument-hint: [status|ask|off|exit|reset|steer <text>]
 ---
 
-# ccp — Claude Code control plane
+# /ccp — Claude Code control plane
 
-Run the state helper and report its output verbatim. Do not explore the
-filesystem, do not shell out to anything else, do not summarise.
+`/ccp` is dedicated to Claude Code. It controls this session's stop-gate
+(when to ask you), the block counter, and steering (redirecting a running
+agent without stopping it).
 
-Resolve the helper in this order and use the first one that exists:
+It runs one local helper directly — no model reasoning, no extra tokens.
 
-1. `$CCP_HOME/ccp_state.py`
-2. `~/.ccp/ccp_state.py`
-3. `~/.claude/plugins/cache/local/ccp/*/scripts/ccp_state.py`
-4. `~/cc-control-plane/mod/scripts/ccp_state.py`
-
-Then run:
+**Run exactly this, then print the helper's output verbatim. Nothing else.**
 
 ```bash
-CCP_HOME="${CCP_HOME:-$HOME/.ccp}" python3 <resolved-helper> "$ARGUMENTS"
+CCP_HOME="${CCP_HOME:-$HOME/.ccp}" python3 "$HOME/.claude/ccp/ccp.py" $ARGUMENTS
 ```
 
 Rules:
-- `$ARGUMENTS` empty → run the helper with no arguments, print its output
-  exactly.
-- `$ARGUMENTS` is `off`, `ask`, `exit`, or `reset` → run the helper with
-  that single argument, print its output exactly.
-- `$ARGUMENTS` is anything else → run the helper with no arguments (the
-  status card lists the valid values), print that output exactly.
-- If no helper is found, print one line:
-  `ccp: helper not found` and nothing else.
-
-Never add commentary before or after the helper's output.
+- Run the command once. If `$ARGUMENTS` is empty, pass no extra argument.
+- Print the helper's stdout exactly as it is — no summary, no commentary
+  before or after, no markdown fence.
+- If the helper exits non-zero, print its stderr exactly and stop.
+- If the helper cannot be found, print this one line and stop:
+  `ccp: helper not found at $HOME/.claude/ccp/ccp.py`
+- Never explore the filesystem to find the helper. Never substitute another
+  command. This one command does everything.
