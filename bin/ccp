@@ -19,6 +19,7 @@ ccp — Claude Code control plane
   ccp reset                         reset the stop counter
   ccp notify-test                   send a termux notification (if available)
   ccp ui [--port N]                 start the localhost web dashboard
+  ccp web [port] [bind]             serve the real Claude Code TUI in a browser (ttyd)
   ccp statusline                    one-line summary for a Claude Code statusline
   ccp install-hook                  print the hooks JSON to merge into settings
   ccp help                          this text
@@ -114,6 +115,9 @@ case "$cmd" in
       esac
     done
     CCP_PORT="$port" exec python3 "$SCRIPTS_DIR/ccp-server.py"
+    ;;
+  web)
+    exec "$SCRIPTS_DIR/ccp-web-terminal.sh" "$@"
     ;;
   statusline)
     m=$( [ -f "$CCP_HOME/stop-mode" ] && cat "$CCP_HOME/stop-mode" || echo off )
