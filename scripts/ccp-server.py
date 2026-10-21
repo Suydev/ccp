@@ -218,9 +218,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
-        if self.path in ("/", "/index.html"):
+        path = self.path.split("?", 1)[0].split("#", 1)[0]
+        if path in ("/", "/index.html"):
             self._send(200, PAGE.encode(), "text/html; charset=utf-8")
-        elif self.path == "/api/state":
+        elif path == "/api/state":
             self._send(200, json.dumps(state()).encode(), "application/json")
         else:
             self._send(404, b"not found", "text/plain")
@@ -231,7 +232,8 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length) or b"{}")
         except ValueError:
             body = {}
-        if self.path == "/api/mode":
+        path = self.path.split("?", 1)[0].split("#", 1)[0]
+        if path == "/api/mode":
             mode = body.get("mode")
             if mode not in MODES:
                 self._send(400, json.dumps({"error": "mode must be one of %s" % (MODES,)}).encode(), "application/json")
@@ -239,7 +241,7 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(STATE, "stop-mode"), "w") as f:
                 f.write(mode)
             self._send(200, json.dumps({"mode": mode}).encode(), "application/json")
-        elif self.path == "/api/reset":
+        elif path == "/api/reset":
             with open(os.path.join(STATE, "stop-count"), "w") as f:
                 f.write("0")
             self._send(200, json.dumps({"ok": True}).encode(), "application/json")

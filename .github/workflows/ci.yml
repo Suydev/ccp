@@ -45,6 +45,8 @@ jobs:
           curl -s -X POST -d '{"mode":"<script>"}' http://127.0.0.1:8798/api/mode | grep -q 'error'
           curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8798/nope | grep -q 404
           curl -sf http://127.0.0.1:8798/ | grep -q 'ccp control plane'
+          curl -sf 'http://127.0.0.1:8798/?cb=1' | grep -q 'ccp control plane'
+          curl -sf 'http://127.0.0.1:8798/api/state?x=1' | jq -e .mode
           kill $SRV
       - name: summary
         if: always()
