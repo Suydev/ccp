@@ -10,14 +10,14 @@ Works with any provider behind Claude Code — it never touches model config,
 API keys, or ports. Everything lives in `$CCP_HOME` (default `$HOME/.ccp`).
 
 ```
-┌──────────────┐   launches    ┌─────────────┐
-│ ccp start    │ ────────────▶ │ claude CLI  │
-│ (supervisor) │               └──────┬──────┘
-│              │   Stop hook          │ every turn end
-│  loops until │ ◀────────────────────┤ stop_gate.py:
-│ stop-mode=   │   blocks turn end    │  ask → block+ask user
-│ exit         │                      │  off/exit → let it end
-└──────────────┘                      └─────────────┘
+┌──────────────┐  launches        ┌─────────────┐
+│ ccp start    │ ─────────▶       │ claude CLI  │
+│ (supervisor) │                  └──────┬──────┘
+│              │ Stop hook        │ every turn  │
+│ loops until  │ ◀────────        ┤ stop_gate   │
+│ stop-mode=   │ blocks turn end  │ ask→block   │
+│ exit         │                  │ off → end   │
+└──────────────┘                  └─────────────┘
 ```
 
 ## Install
@@ -110,3 +110,22 @@ MIT — see [LICENSE](LICENSE).
   are overwritten when those plugins update. Originals are kept next to them
   as `hooks.json.orig-ccpp`; re-apply or re-derive from the pattern in
   `docs/design.md` after upgrading those plugins.
+
+## Web dashboard + statusline
+
+```bash
+ccp ui                # control panel at http://127.0.0.1:8799 (Ctrl-C to stop)
+ccp ui --port 9000    # custom port
+ccp statusline        # one-line summary for a Claude Code statusline command
+```
+
+The dashboard reads/writes the same `$CCP_HOME` state the hooks use: mode
+switch buttons (off/ask/exit), stop-count with reset, live session and
+supervisor-log tails, auto-refresh every 3 s. Python stdlib only — no pip,
+no node. It binds 127.0.0.1 by default (`CCP_BIND` to change).
+
+Inside Claude Code, add to your statusline settings:
+
+```json
+{ "statusLine": { "type": "command", "command": "<path-to>/ccp/bin/ccp statusline" } }
+```

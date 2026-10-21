@@ -18,6 +18,8 @@ ccp — Claude Code control plane
   ccp status                        show current mode, counter, recent sessions
   ccp reset                         reset the stop counter
   ccp notify-test                   send a termux notification (if available)
+  ccp ui [--port N]                 start the localhost web dashboard
+  ccp statusline                    one-line summary for a Claude Code statusline
   ccp install-hook                  print the hooks JSON to merge into settings
   ccp help                          this text
 
@@ -103,6 +105,21 @@ case "$cmd" in
   status) status ;;
   reset) printf '0' > "$CCP_HOME/stop-count"; echo "stop-count reset" ;;
   notify-test) notify_test ;;
+  ui)
+    port=8799
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --port) port="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    CCP_PORT="$port" exec python3 "$SCRIPTS_DIR/ccp-server.py"
+    ;;
+  statusline)
+    m=$( [ -f "$CCP_HOME/stop-mode" ] && cat "$CCP_HOME/stop-mode" || echo off )
+    c=$( [ -f "$CCP_HOME/stop-count" ] && cat "$CCP_HOME/stop-count" || echo 0 )
+    printf 'ccp:%s(%s)' "$m" "$c"
+    ;;
   install-hook) install_hook ;;
   help|*) usage ;;
 esac
