@@ -108,3 +108,29 @@ installer idempotency, and the web-dashboard API on every push.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Steering a running session
+
+Change the agent's mind **while it is working** — the turn is not stopped,
+the instruction is queued and picked up on the next step.
+
+```bash
+ccp steer "also handle the failing test"     # deliver now
+ccp steer --file notes.md                    # send a file's contents
+ccp steer --list                             # what is queued / already sent
+ccp steer --clear                            # drop the queue
+```
+
+Delivery paths, tried in order:
+
+1. **tmux** — bracketed paste into the pane, then Enter. Claude Code reads a
+   pasted message as a queued user message; the current turn finishes and the
+   instruction is picked up next.
+2. **ttyd** — the same paste over the ttyd websocket, so a browser session
+   can be steered too (`CCP_TTYD_PORT`, default 7681).
+3. **Queue** — if no live session is found, the message waits in
+   `$CCP_HOME/steer-queue/` and the `SessionStart` drain injects it into the
+   next session. Nothing is lost.
+
+The queue is drained exactly once: drained messages move to
+`$CCP_HOME/steer-sent/`, so a later session start does not repeat them.
