@@ -28,11 +28,13 @@ MAX_BLOCKS = 0
 
 REASON = (
     "ccp: the user wants this session to keep going. Do NOT end your turn "
-    "and do NOT just continue the work silently — you MUST call the "
-    "AskUserQuestion tool right now, asking the user to choose "
-    "'continue', 'new task', or 'exit'. Ask this question on EVERY turn end "
-    "(every time you see this reason, ask again) until the user picks exit; "
-    "when they pick exit, tell them to run /ccp exit so the session can end."
+    "and do NOT just continue the work silently. You MUST call the "
+    "AskUserQuestion tool right now (if it is not in your tool list, use "
+    "ToolSearch with query 'select:AskUserQuestion' to load it first), "
+    "asking the user to choose 'continue', 'new task', or 'exit'. Ask this "
+    "question on EVERY turn end (every time you see this reason, ask again) "
+    "until the user picks exit; when they pick exit, tell them to run "
+    "/ccp exit so the session can end."
 )
 
 
@@ -95,9 +97,15 @@ def main():
         sys.exit(0)
 
     counter = f"(block {n})" if not MAX_BLOCKS else f"(block {n}/{MAX_BLOCKS})"
+    # `continue: false` + `stopReason` is the current contract. The legacy
+    # `{"decision": "block"}` shape is still honoured by the CLI, but it is
+    # rendered as "Stop hook blocking error", which reads like a crash. The
+    # modern shape renders as "Stop hook feedback" — a normal-looking note.
     sys.stdout.write(json.dumps({
-        "decision": "block",
-        "reason": f"{REASON} {counter}",
+        "continue": False,
+        "stopReason": f"{REASON} {counter}",
+        "systemMessage": f"ccp: waiting for you — {counter}",
+        "suppressOutput": True,
     }))
     sys.exit(0)
 

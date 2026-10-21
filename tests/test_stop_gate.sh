@@ -30,7 +30,8 @@ t "mode exit -> silent" "" '{}'
 # mode ask: blocks with reason
 printf 'ask' > "$TMP/stop-mode"
 rm -f "$TMP/stop-count"
-t "mode ask -> blocks" '"decision": "block"' '{}'
+t "mode ask -> blocks" '"continue": false' '{}'
+t "mode ask -> has stopReason" '"stopReason"' '{}'
 t "mode ask -> has reason" 'AskUserQuestion' '{}'
 t "mode ask -> reason says ask every time" 'EVERY turn end' '{}'
 
@@ -38,7 +39,7 @@ t "mode ask -> reason says ask every time" 'EVERY turn end' '{}'
 n_blocked=0
 for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
   o=$(printf '%s' '{"stop_hook_active": true}' | python3 "$HOOKS_DIR/stop_gate.py" 2>/dev/null)
-  case "$o" in *'"decision": "block"'*) n_blocked=$((n_blocked + 1));; esac
+  case "$o" in *'"continue": false'*) n_blocked=$((n_blocked + 1));; esac
 done
 if [ "$n_blocked" = "20" ]; then
   PASS=$((PASS+1)); echo "ok   - 20 consecutive blocks all block (unlimited)"
@@ -49,7 +50,7 @@ fi
 # invalid json -> treated as empty payload: mode ask still applies, no crash
 printf 'ask' > "$TMP/stop-mode"
 rm -f "$TMP/stop-count"
-t "invalid json -> mode ask still blocks" '"decision": "block"' 'not-json{{'
+t "invalid json -> mode ask still blocks" '"continue": false' 'not-json{{'
 printf 'off' > "$TMP/stop-mode"
 
 echo
