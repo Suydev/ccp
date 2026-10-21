@@ -48,6 +48,17 @@ command -v claude >/dev/null 2>&1 || {
   exit 1
 }
 
+# claude is interactive by design here; refuse to run without a terminal
+# (headless -p runs have nothing to ask, so a loop makes no sense and would
+# crash-relaunch forever).
+if [ -t 0 ] && [ -t 1 ]; then
+  :
+else
+  echo "ccp-supervisor: no tty — the supervisor runs interactive sessions only." >&2
+  echo "For headless use, call claude -p directly (CCP hooks still apply)." >&2
+  exit 1
+fi
+
 cycle=0
 : > "$CCP_HOME/supervisor.log"
 while :; do
