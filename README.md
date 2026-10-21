@@ -95,3 +95,18 @@ tests/test_e2e.sh           # headless claude run, asserts hooks fired cleanly
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Known limitations (measured, not assumed)
+
+- **Headless ask-mode parks the session.** In `-p` mode nothing can answer
+  AskUserQuestion, so an ask-block waits forever. Ask-mode is for interactive
+  sessions; in headless runs keep `stop-mode off`.
+- **Other Stop-hook plugins can veto the gate.** Claude Code takes the first
+  decisive Stop-hook decision; a plugin that emits
+  `{"decision":"approve"}` (e.g. a judge/latte plugin) moots the block.
+  For reliable ask-mode, disable competing Stop-hook plugins.
+- **Plugin cache fixes are not durable.** The bash shims for vercel /
+  claude-session-driver / homunculus live in Claude Code's plugin cache and
+  are overwritten when those plugins update. Originals are kept next to them
+  as `hooks.json.orig-ccpp`; re-apply or re-derive from the pattern in
+  `docs/design.md` after upgrading those plugins.
