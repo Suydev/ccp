@@ -15,6 +15,9 @@ ccp — Claude Code control plane
 
   ccp start [--resume] [--workdir DIR] [-- claude-args...]   run the supervisor loop
   ccp stop-mode off|ask|exit        set the Stop-hook behavior
+  ccp steer "instruction"           send instructions to a RUNNING session
+  ccp steer --file PATH             send a file's contents
+  ccp steer --list | --clear        inspect / clear the steer queue
   ccp status                        show current mode, counter, recent sessions
   ccp reset                         reset the stop counter
   ccp notify-test                   send a termux notification (if available)
@@ -118,6 +121,9 @@ case "$cmd" in
     ;;
   web)
     exec "$SCRIPTS_DIR/ccp-web-terminal.sh" "$@"
+    ;;
+  steer)
+    exec python3 "$HOOKS_DIR/steer.py" "$@"
     ;;
   statusline)
     m=$( [ -f "$CCP_HOME/stop-mode" ] && cat "$CCP_HOME/stop-mode" || echo off )

@@ -50,6 +50,12 @@ merge() {
         return `bash ${hooksDir}/session_bookend.sh ${ev === "SessionStart" ? "start" : "end"}`;
       };
       replace("Stop"); replace("StopFailure"); replace("SessionStart"); replace("SessionEnd");
+      // The steer drain is a SECOND SessionStart entry, so it must not replace
+      // the bookend: both have to run. Append it separately, dropping any
+      // previous copy of itself first.
+      s.hooks.SessionStart = (s.hooks.SessionStart || [])
+        .filter(grp => !JSON.stringify(grp).includes("steer_drain.sh"))
+        .concat([{ hooks: entry(`bash ${hooksDir}/steer_drain.sh`) }]);
       fs.writeFileSync(settingsPath, JSON.stringify(s, null, 2));
     ' "$SETTINGS" "$HOOKS_DIR" "$CCP_HOME"
   elif command -v jq >/dev/null 2>&1; then
@@ -64,6 +70,9 @@ merge() {
       | replace("Stop"; "python3 " + $hd + "/stop_gate.py")
       | replace("StopFailure"; "python3 " + $hd + "/failure_gate.py")
       | replace("SessionStart"; "bash " + $hd + "/session_bookend.sh start")
+      | .hooks.SessionStart = ((.hooks.SessionStart // [])
+          | map(select((tostring | contains("steer_drain.sh")) | not)))
+          + [{ hooks: entry("bash " + $hd + "/steer_drain.sh") }]
       | replace("SessionEnd"; "bash " + $hd + "/session_bookend.sh end")
     ' "$SETTINGS" > "$tmp" && mv "$tmp" "$SETTINGS"
   else
