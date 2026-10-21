@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: unit tests (stop gate)
         run: bash tests/test_stop_gate.sh
+      - name: state helper units
+        run: bash tests/test_state_helper.sh
       - name: bookend degradation paths
         run: |
           set -e

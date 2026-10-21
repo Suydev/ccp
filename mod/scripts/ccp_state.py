@@ -101,6 +101,9 @@ def main():
     elif cmd == "reset":
         write_text("stop-count", "0")
         print("stop-count reset to 0")
+    elif cmd in MODES:
+        # bare mode is shorthand for `set <mode>` — the /ccp <mode> form
+        print(set_mode(cmd))
     else:
         print(f"ccp_state: unknown command {cmd!r}", file=sys.stderr)
         sys.exit(2)
