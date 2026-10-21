@@ -21,7 +21,8 @@ echo "== stop gate =="
 GATE="$ROOT/hooks/stop_gate.py"
 printf 'ask' > "$WORK/stop-mode"
 out=$(printf '{"stop_hook_active":false}' | python3 "$GATE" 2>/dev/null)
-chk "ask mode blocks"          "printf '%s' \"\$out\" | command grep -q '\"decision\": \"block\"'"
+chk "ask mode blocks"          "printf '%s' \"\$out\" | command grep -q '\"continue\": false'"
+chk "ask mode has stopReason" "printf '%s' \"\$out\" | command grep -q '\"stopReason\"'"
 printf 'off' > "$WORK/stop-mode"
 out=$(printf '{}' | python3 "$GATE" 2>/dev/null)
 chk "off mode silent"         "[ -z \"\$out\" ]"
