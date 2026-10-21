@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # ccp-supervisor: keeps a Claude Code session alive until the user says exit.
 # No hardcoded paths, no hardcoded models, no hardcoded ports — it calls the
 # `claude` on PATH and reads/writes only under $CCP_HOME (default $HOME/.ccp).

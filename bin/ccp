@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # ccp: user-facing control commands for the Claude Code control plane.
 # Open-source friendly: no hardcoded paths, no device-specific values; all
 # state lives under $CCP_HOME (default: $HOME/.ccp).

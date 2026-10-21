@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # ccp installer: merges the control-plane hooks into the user's Claude Code
 # settings. Idempotent. Never overwrites unrelated settings.
 #
