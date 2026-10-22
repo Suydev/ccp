@@ -18,6 +18,8 @@ import os
 import signal
 import subprocess
 import sys
+import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 STATE = os.environ.get("CCP_HOME") or os.path.join(os.environ.get("HOME", "/"), ".ccp")
@@ -25,6 +27,13 @@ PORT = int(os.environ.get("CCP_PORT", "8799"))
 BIND = os.environ.get("CCP_BIND", "127.0.0.1")
 TAIL_LINES = int(os.environ.get("CCP_TAIL_LINES", "30"))
 MODES = ("off", "ask", "exit")
+
+# The real Claude Code TUI, served over ttyd's websocket.
+TTYD_PORT = int(os.environ.get("CCP_TTYD_PORT", "7681"))
+TTYD_CMD = os.environ.get(
+    "CCP_TTYD_CMD",
+    "claude --plugin-dir ~/.claude/plugins/cache/local/ccp/1.0.0",
+)
 
 
 def read_mode():
@@ -84,6 +93,62 @@ def state():
     }
 
 
+def ttyd_running():
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{TTYD_PORT}/token", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+def start_ttyd():
+    """Start the terminal server if it is not already up."""
+    if ttyd_running():
+        return True
+    if not shutil_which("ttyd"):
+        return False
+    try:
+        subprocess.Popen(
+            ["ttyd", "-p", str(TTYD_PORT), "-W", "bash", "-lc", TTYD_CMD],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        for _ in range(20):
+            time.sleep(0.5)
+            if ttyd_running():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def shutil_which(name):
+    for d in os.environ.get("PATH", "").split(os.pathsep):
+        p = os.path.join(d, name)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
+
+def steer(text):
+    """Deliver an instruction to a running session; queue it if none is live."""
+    if not text.strip():
+        return {"ok": False, "error": "empty message"}
+    steer_py = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "hooks", "steer.py")
+    try:
+        proc = subprocess.run(
+            [sys.executable, steer_py, text],
+            capture_output=True, timeout=30, text=True,
+            env={**os.environ, "CCP_HOME": STATE},
+        )
+        out = (proc.stdout or "").strip()
+        return {"ok": proc.returncode == 0, "output": out,
+                "error": (proc.stderr or "").strip() or None}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 PAGE = """<!doctype html>
 <html lang="en">
 <head>
@@ -129,12 +194,33 @@ pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
          background: var(--panel); border: 1px solid var(--line);
          padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .3s; }
 .toast.show { opacity: 1; }
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tab { flex: 1; text-align: center; padding: 9px 4px; border: 1px solid var(--line);
+       border-radius: 8px; background: var(--panel); cursor: pointer; font-size: 14px; }
+.tab.active { border-color: var(--fg); font-weight: 600; }
+.pane { display: none; }
+.pane.active { display: block; }
+.steer { display: flex; gap: 8px; margin-top: 10px; }
+.steer input { flex: 1; background: var(--bg); color: var(--fg);
+               border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px;
+               font: inherit; min-width: 0; }
+.steer button { white-space: nowrap; }
+#term { width: 100%; height: 62vh; border: 1px solid var(--line); border-radius: 8px;
+        background: #000; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>ccp control plane</h1>
   <div class="sub" id="home"></div>
+
+  <div class="tabs">
+    <div class="tab active" data-pane="control">Control</div>
+    <div class="tab" data-pane="terminal">Terminal</div>
+  </div>
+
+  <div class="pane active" id="pane-control">
 
   <div class="card">
     <div class="row">
@@ -162,6 +248,24 @@ pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
   <div class="card">
     <div class="label">supervisor log (tail)</div>
     <pre id="suplog">…</pre>
+  </div>
+
+  <div class="card">
+    <div class="label">steer a running session</div>
+    <div class="steer">
+      <input id="steerText" placeholder="instruction for the running agent…" autocomplete="off">
+      <button id="steerGo">send</button>
+    </div>
+    <div class="hint">Delivered mid-turn without stopping it. Falls back to the queue if no session is live.</div>
+  </div>
+  </div>
+
+  <div class="pane" id="pane-terminal">
+    <div class="card">
+      <div class="label">live claude code terminal</div>
+      <iframe id="term" src="/terminal/" title="terminal"></iframe>
+      <div class="hint">The real Claude Code TUI, served over a websocket. Type in it like a normal terminal.</div>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -201,6 +305,31 @@ async function post(path, body) {
 document.querySelectorAll("button[data-mode]").forEach(b =>
   b.addEventListener("click", () => post("/api/mode", {mode: b.dataset.mode})));
 $("reset").addEventListener("click", () => post("/api/reset"));
+
+// tabs
+document.querySelectorAll(".tab").forEach(tab =>
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".pane").forEach(x => x.classList.remove("active"));
+    tab.classList.add("active");
+    $("pane-" + tab.dataset.pane).classList.add("active");
+  }));
+
+// steer
+async function steer() {
+  const text = $("steerText").value.trim();
+  if (!text) return;
+  try {
+    const r = await fetch("/api/steer", { method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text}) });
+    const j = await r.json();
+    toast(j.ok ? "sent" : (j.error || "failed"));
+    if (j.ok) $("steerText").value = "";
+  } catch (e) { toast("error: " + e.message); }
+}
+$("steerGo").addEventListener("click", steer);
+$("steerText").addEventListener("keydown", e => { if (e.key === "Enter") steer(); });
 refresh();
 setInterval(refresh, 3000);
 </script>
@@ -223,6 +352,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, PAGE.encode(), "text/html; charset=utf-8")
         elif path == "/api/state":
             self._send(200, json.dumps(state()).encode(), "application/json")
+        elif path == "/terminal" or path.startswith("/terminal/"):
+            # The terminal is ttyd's own client. Redirect there so the
+            # websocket lands on the right port.
+            if not ttyd_running():
+                start_ttyd()
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{TTYD_PORT}/")
+            self.end_headers()
         else:
             self._send(404, b"not found", "text/plain")
 
@@ -245,6 +382,9 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(STATE, "stop-count"), "w") as f:
                 f.write("0")
             self._send(200, json.dumps({"ok": True}).encode(), "application/json")
+        elif path == "/api/steer":
+            self._send(200, json.dumps(steer(body.get("text", ""))).encode(),
+                       "application/json")
         else:
             self._send(404, b"not found", "text/plain")
 
